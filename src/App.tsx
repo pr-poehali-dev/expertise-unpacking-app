@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import * as api from "@/api/expertise";
-import type { Answer, FinalProfile } from "@/api/expertise";
+import type { Answer, FinalProfile, BlindInsights, MarketingStrategy } from "@/api/expertise";
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 
@@ -726,10 +726,280 @@ function ResultBlock({ title, icon, content }: { title: string; icon: string; co
   );
 }
 
+// ─── Blind Insights Section ───────────────────────────────────────────────────
+
+function BlindInsightsSection({ data }: { data: BlindInsights }) {
+  return (
+    <div className="space-y-4">
+      {/* Hidden strengths */}
+      {(data.hidden_strengths?.length ?? 0) > 0 && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Eye" size={15} style={{ color: "#10b981" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Скрытые сильные стороны</h3>
+          </div>
+          <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>То, что вы используете как само собой разумеющееся — но это редкость на рынке</p>
+          <div className="space-y-3">
+            {data.hidden_strengths.map((s, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 text-xs font-bold"
+                  style={{ background: "rgba(16,185,129,0.12)", color: "#10b981" }}>{i + 1}</div>
+                <div>
+                  <p className="text-sm font-medium mb-0.5" style={{ color: "var(--fg)" }}>{s.title}</p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{s.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Blind spots */}
+      {(data.blind_spots?.length ?? 0) > 0 && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="EyeOff" size={15} style={{ color: "#f59e0b" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Слепые зоны</h3>
+          </div>
+          <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>То, чего вы о себе не замечаете — но это видно снаружи</p>
+          <div className="space-y-3">
+            {data.blind_spots.map((s, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 text-xs font-bold"
+                  style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>{i + 1}</div>
+                <div>
+                  <p className="text-sm font-medium mb-0.5" style={{ color: "var(--fg)" }}>{s.title}</p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{s.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Patterns */}
+      {data.patterns && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="GitBranch" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Паттерны мышления</h3>
+          </div>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{data.patterns}</p>
+        </div>
+      )}
+
+      {/* Underused potential */}
+      {data.underused_potential && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="TrendingUp" size={15} style={{ color: "#10b981" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Нераскрытый потенциал</h3>
+          </div>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{data.underused_potential}</p>
+        </div>
+      )}
+
+      {/* Risk warning */}
+      {data.risk_warning && (
+        <div className="rounded-2xl p-5" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.2)" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="AlertTriangle" size={15} style={{ color: "#f59e0b" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "#f59e0b" }}>Главный риск</h3>
+          </div>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{data.risk_warning}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Marketing Strategy Section ───────────────────────────────────────────────
+
+function MarketingStrategySection({ data }: { data: MarketingStrategy }) {
+  return (
+    <div className="space-y-4">
+      {/* Angle */}
+      {data.positioning_angle && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="Crosshair" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Угол подачи</h3>
+          </div>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{data.positioning_angle}</p>
+        </div>
+      )}
+
+      {/* Channels */}
+      {(data.primary_channels?.length ?? 0) > 0 && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Radio" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Приоритетные каналы</h3>
+          </div>
+          <div className="space-y-4">
+            {data.primary_channels.map((ch, i) => (
+              <div key={i} className="pb-4 last:pb-0" style={{ borderBottom: i < data.primary_channels.length - 1 ? "1px solid var(--border)" : "none" }}>
+                <p className="text-sm font-semibold mb-1" style={{ color: "var(--fg)" }}>{ch.channel}</p>
+                <p className="text-xs leading-relaxed mb-1.5" style={{ color: "var(--muted)" }}>{ch.why}</p>
+                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}>
+                  {ch.format}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Content strategy */}
+      {data.content_strategy && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Calendar" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Контент-стратегия</h3>
+          </div>
+          {data.content_strategy.weekly_rhythm && (
+            <div className="mb-4">
+              <p className="text-xs uppercase tracking-wider mb-1.5" style={{ color: "var(--muted2)" }}>Ритм публикаций</p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{data.content_strategy.weekly_rhythm}</p>
+            </div>
+          )}
+          {(data.content_strategy.hook_themes?.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--muted2)" }}>Темы-крючки</p>
+              <div className="flex flex-wrap gap-2">
+                {data.content_strategy.hook_themes.map((t, i) => (
+                  <span key={i} className="text-xs px-2.5 py-1 rounded-full" style={{ background: "var(--surface2)", color: "var(--fg)", border: "1px solid var(--border)" }}>{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.content_strategy.viral_mechanic && (
+            <div>
+              <p className="text-xs uppercase tracking-wider mb-1.5" style={{ color: "var(--muted2)" }}>Вирусная механика</p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{data.content_strategy.viral_mechanic}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Lead magnet */}
+      {data.lead_magnet && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Gift" size={15} style={{ color: "#10b981" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Лид-магнит</h3>
+          </div>
+          <p className="text-sm font-medium mb-1" style={{ color: "var(--fg)" }}>{data.lead_magnet.title}</p>
+          <p className="text-xs mb-2" style={{ color: "var(--muted)" }}>{data.lead_magnet.idea}</p>
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+            {data.lead_magnet.format}
+          </span>
+        </div>
+      )}
+
+      {/* First product */}
+      {data.first_product && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Package" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Первый / следующий продукт</h3>
+          </div>
+          <p className="text-sm leading-relaxed mb-3" style={{ color: "var(--fg)" }}>{data.first_product.idea}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl p-3" style={{ background: "var(--surface2)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--muted2)" }}>Формат</p>
+              <p className="text-xs font-medium" style={{ color: "var(--fg)" }}>{data.first_product.format}</p>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: "var(--surface2)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--muted2)" }}>Цена</p>
+              <p className="text-xs font-medium" style={{ color: "var(--fg)" }}>{data.first_product.price_range}</p>
+            </div>
+          </div>
+          {data.first_product.launch_mechanic && (
+            <div className="mt-3">
+              <p className="text-xs mb-1" style={{ color: "var(--muted2)" }}>Как запустить</p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{data.first_product.launch_mechanic}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quick wins */}
+      {(data.quick_wins?.length ?? 0) > 0 && (
+        <div className="rounded-2xl p-5" style={{ background: "rgba(124,110,246,0.06)", border: "1px solid var(--accent-border)" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Zap" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Первые 7 дней — быстрые шаги</h3>
+          </div>
+          <div className="space-y-2.5">
+            {data.quick_wins.map((w, i) => (
+              <div key={i} className="flex gap-3 items-start">
+                <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 text-xs font-bold"
+                  style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}>{i + 1}</div>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{w}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Roadmap */}
+      {(data.growth_roadmap?.length ?? 0) > 0 && (
+        <div className="ex-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Map" size={15} style={{ color: "var(--accent)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Дорожная карта роста</h3>
+          </div>
+          <div className="space-y-4">
+            {data.growth_roadmap.map((item, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ background: "var(--accent-subtle)", color: "var(--accent)", border: "1.5px solid var(--accent-border)" }}>
+                    {i + 1}
+                  </div>
+                  {i < data.growth_roadmap.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: "var(--border)" }} />}
+                </div>
+                <div className="pb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "var(--surface2)", color: "var(--muted)" }}>{item.period}</span>
+                  </div>
+                  <p className="text-sm font-medium mb-0.5" style={{ color: "var(--fg)" }}>{item.focus}</p>
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>{item.goal}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Result Screen ────────────────────────────────────────────────────────────
 
-function ResultScreen({ profile, onRestart }: { profile: FinalProfile; onRestart: () => void }) {
+function ResultScreen({ profile, sessionId, onRestart }: { profile: FinalProfile; sessionId: string; onRestart: () => void }) {
   const [copiedAll, setCopiedAll] = useState(false);
+  const [activeTab, setActiveTab] = useState<"profile" | "insights" | "strategy">("profile");
+  const [insights, setInsights] = useState<BlindInsights | null>(null);
+  const [strategy, setStrategy] = useState<MarketingStrategy | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState("");
+
+  const handleLoadInsights = async () => {
+    if (insights && strategy) { setActiveTab("insights"); return; }
+    setInsightsLoading(true);
+    setInsightsError("");
+    try {
+      const res = await api.generateInsights(sessionId);
+      setInsights(res.insights);
+      setStrategy(res.strategy);
+      setActiveTab("insights");
+    } catch (e: unknown) {
+      setInsightsError(e instanceof Error ? e.message : "Ошибка генерации. Попробуйте ещё раз.");
+    }
+    setInsightsLoading(false);
+  };
 
   const fullText = [
     "ПРОФИЛЬ ЭКСПЕРТА\n",
@@ -775,45 +1045,130 @@ function ResultScreen({ profile, onRestart }: { profile: FinalProfile; onRestart
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4" style={{ background: "var(--accent-subtle)" }}>
-            <Icon name="Trophy" size={20} style={{ color: "var(--accent)" }} />
-          </div>
-          <h1 className="font-display text-3xl font-light mb-1" style={{ color: "var(--fg)" }}>Ваш профиль эксперта</h1>
-          <p className="text-sm" style={{ color: "var(--muted)" }}>Используйте в блоге, на сайте и в продажах</p>
+      {/* Tabs */}
+      <div className="max-w-2xl mx-auto px-6 pt-6 pb-0">
+        <div className="flex gap-0 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
+          {([
+            { key: "profile" as const, label: "Профиль", icon: "User" },
+            { key: "insights" as const, label: "Полная картина", icon: "Eye" },
+            { key: "strategy" as const, label: "Стратегия", icon: "TrendingUp" },
+          ]).map(tab => (
+            <button key={tab.key}
+              onClick={() => tab.key === "insights" ? handleLoadInsights() : tab.key === "strategy" ? (insights ? setActiveTab("strategy") : handleLoadInsights()) : setActiveTab(tab.key)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all"
+              style={{
+                background: activeTab === tab.key ? "var(--accent)" : "transparent",
+                color: activeTab === tab.key ? "#fff" : "var(--muted)",
+              }}>
+              <Icon name={tab.icon} size={13} fallback="Star" />
+              {tab.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <ResultBlock title="Личный код" icon="Fingerprint" content={profile.personal_code || "—"} />
-        <ResultBlock title="Экспертная зона" icon="Layers" content={profile.expert_zone || "—"} />
-        <ResultBlock title="Портрет аудитории" icon="Users" content={profile.audience_profile || "—"} />
-        <ResultBlock title="Позиционирование" icon="Crosshair" content={profile.positioning || "—"} />
-        <ResultBlock title="Тон общения" icon="MessageSquare" content={profile.tone_of_voice || "—"} />
-        <ResultBlock title="Контент-ядро" icon="Flame" content={profile.content_core || "—"} />
-        {(profile.rubrics?.length ?? 0) > 0 && (
-          <ResultBlock title="5 контент-рубрик" icon="LayoutGrid" content={profile.rubrics} />
-        )}
+      <div className="max-w-2xl mx-auto px-6 py-8">
 
-        {(profile.self_presentations?.length ?? 0) > 0 && (
-          <div className="ex-card rounded-2xl p-5 mb-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Icon name="Mic2" size={15} style={{ color: "var(--accent)" }} />
-              <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Самопрезентации</h3>
+        {/* Profile tab */}
+        {activeTab === "profile" && (
+          <div style={{ animation: "fadeInUp 0.3s ease forwards" }}>
+            <div className="mb-7">
+              <h1 className="font-display text-2xl font-light mb-1" style={{ color: "var(--fg)" }}>Ваш профиль эксперта</h1>
+              <p className="text-xs" style={{ color: "var(--muted)" }}>Используйте в блоге, на сайте и в продажах</p>
             </div>
-            {profile.self_presentations.map((sp, i) => (
-              <div key={i} className="mb-4 last:mb-0">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs uppercase tracking-wider" style={{ color: "var(--muted2)" }}>{sp.length}</p>
-                  <button onClick={() => copyText(sp.text)} className="text-xs" style={{ color: "var(--muted)" }}>Скопировать</button>
+
+            <ResultBlock title="Личный код" icon="Fingerprint" content={profile.personal_code || "—"} />
+            <ResultBlock title="Экспертная зона" icon="Layers" content={profile.expert_zone || "—"} />
+            <ResultBlock title="Портрет аудитории" icon="Users" content={profile.audience_profile || "—"} />
+            <ResultBlock title="Позиционирование" icon="Crosshair" content={profile.positioning || "—"} />
+            <ResultBlock title="Тон общения" icon="MessageSquare" content={profile.tone_of_voice || "—"} />
+            <ResultBlock title="Контент-ядро" icon="Flame" content={profile.content_core || "—"} />
+            {(profile.rubrics?.length ?? 0) > 0 && (
+              <ResultBlock title="5 контент-рубрик" icon="LayoutGrid" content={profile.rubrics} />
+            )}
+
+            {(profile.self_presentations?.length ?? 0) > 0 && (
+              <div className="ex-card rounded-2xl p-5 mb-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Icon name="Mic2" size={15} style={{ color: "var(--accent)" }} />
+                  <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Самопрезентации</h3>
                 </div>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{sp.text}</p>
-                {i < profile.self_presentations.length - 1 && <div className="mt-4" style={{ borderTop: "1px solid var(--border)" }} />}
+                {profile.self_presentations.map((sp, i) => (
+                  <div key={i} className="mb-4 last:mb-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs uppercase tracking-wider" style={{ color: "var(--muted2)" }}>{sp.length}</p>
+                      <button onClick={() => copyText(sp.text)} className="text-xs" style={{ color: "var(--muted)" }}>Скопировать</button>
+                    </div>
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{sp.text}</p>
+                    {i < profile.self_presentations.length - 1 && <div className="mt-4" style={{ borderTop: "1px solid var(--border)" }} />}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {/* CTA to insights */}
+            <div className="mt-6 p-5 rounded-2xl" style={{ background: "rgba(124,110,246,0.06)", border: "1px solid var(--accent-border)" }}>
+              <div className="flex items-start gap-4">
+                <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "var(--accent-subtle)" }}>
+                  <Icon name="Eye" size={16} style={{ color: "var(--accent)" }} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium mb-1" style={{ color: "var(--fg)" }}>Хотите увидеть полную картину?</p>
+                  <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>AI проанализирует то, чего вы о себе не замечаете — и составит маркетинговую стратегию специально под вас</p>
+                  <button onClick={handleLoadInsights} disabled={insightsLoading}
+                    className="ex-btn-primary px-5 py-2 rounded-lg text-xs flex items-center gap-2 disabled:opacity-60">
+                    {insightsLoading ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Sparkles" size={13} />}
+                    {insightsLoading ? "Анализируем..." : "Получить полный анализ"}
+                  </button>
+                  {insightsError && <p className="text-xs mt-2" style={{ color: "#ef4444" }}>{insightsError}</p>}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        <div className="mt-8 p-6 rounded-2xl text-center" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+        {/* Insights tab */}
+        {activeTab === "insights" && (
+          <div style={{ animation: "fadeInUp 0.3s ease forwards" }}>
+            <div className="mb-7">
+              <div className="flex items-center gap-2 mb-1">
+                <Icon name="Eye" size={16} style={{ color: "var(--accent)" }} />
+                <h1 className="font-display text-2xl font-light" style={{ color: "var(--fg)" }}>Полная картина</h1>
+              </div>
+              <p className="text-xs" style={{ color: "var(--muted)" }}>То, чего вы о себе не видите — взгляд снаружи</p>
+            </div>
+            {insightsLoading && (
+              <div className="ex-card rounded-2xl p-8 text-center">
+                <Icon name="Loader2" size={24} className="animate-spin mx-auto mb-3" style={{ color: "var(--accent)" }} />
+                <p className="text-sm" style={{ color: "var(--muted)" }}>AI анализирует ваши ответы...</p>
+              </div>
+            )}
+            {insights && !insightsLoading && <BlindInsightsSection data={insights} />}
+          </div>
+        )}
+
+        {/* Strategy tab */}
+        {activeTab === "strategy" && (
+          <div style={{ animation: "fadeInUp 0.3s ease forwards" }}>
+            <div className="mb-7">
+              <div className="flex items-center gap-2 mb-1">
+                <Icon name="TrendingUp" size={16} style={{ color: "var(--accent)" }} />
+                <h1 className="font-display text-2xl font-light" style={{ color: "var(--fg)" }}>Маркетинговая стратегия</h1>
+              </div>
+              <p className="text-xs" style={{ color: "var(--muted)" }}>Конкретный план продвижения под вашу экспертность</p>
+            </div>
+            {insightsLoading && (
+              <div className="ex-card rounded-2xl p-8 text-center">
+                <Icon name="Loader2" size={24} className="animate-spin mx-auto mb-3" style={{ color: "var(--accent)" }} />
+                <p className="text-sm" style={{ color: "var(--muted)" }}>Составляем стратегию...</p>
+              </div>
+            )}
+            {strategy && !insightsLoading && <MarketingStrategySection data={strategy} />}
+          </div>
+        )}
+
+        {/* Restart */}
+        <div className="mt-10 p-5 rounded-2xl text-center" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
           <p className="text-sm font-medium mb-1" style={{ color: "var(--fg)" }}>Хотите пройти ещё раз?</p>
           <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>Начните новую сессию — всё начнётся с чистого листа</p>
           <button onClick={onRestart} className="text-sm px-5 py-2.5 rounded-xl"
@@ -854,6 +1209,6 @@ export default function App() {
 
   if (appState === "landing") return <Landing onStart={handleStart} loading={startLoading} error={startError} />;
   if (appState === "wizard") return <Wizard state={wizardState} setState={setWizardState} onComplete={handleComplete} />;
-  if (appState === "result" && finalProfile) return <ResultScreen profile={finalProfile} onRestart={handleRestart} />;
+  if (appState === "result" && finalProfile) return <ResultScreen profile={finalProfile} sessionId={wizardState.sessionId} onRestart={handleRestart} />;
   return null;
 }

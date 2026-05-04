@@ -1,6 +1,6 @@
 """
 API для платформы распаковки экспертности.
-Методы: create_session, save_step, generate_followup, generate_summary, generate_final, get_session
+Методы: create_session, save_step, generate_followup, generate_summary, generate_final, generate_insights, get_session
 """
 import json
 import os
@@ -75,6 +75,8 @@ def handler(event: dict, context) -> dict:
         return generate_summary(body)
     if action == "generate_final":
         return generate_final(body)
+    if action == "generate_insights":
+        return generate_insights(body)
 
     return err("Unknown action")
 
@@ -263,6 +265,121 @@ def generate_final(body):
     cur.close()
     conn.close()
     return ok({"profile": profile})
+
+
+def generate_insights(body):
+    session_id = body.get("session_id")
+    if not session_id:
+        return err("session_id is required")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT step_id, question_text, answer_text FROM answers WHERE session_id=%s AND answer_text!='' ORDER BY step_id, created_at",
+        (session_id,)
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return err("No answers found for this session")
+
+    step_names = {1:"Цель", 2:"Личность", 3:"Путь эксперта", 4:"Экспертность", 5:"Аудитория", 6:"Позиционирование", 7:"Контент-ядро"}
+    qa_by_step = {}
+    for step_id, q, a in rows:
+        name = step_names.get(step_id, f"Шаг {step_id}")
+        qa_by_step.setdefault(name, []).append(f"  Q: {q}\n  A: {a}")
+    full_text = "\n\n".join([f"### {name}\n" + "\n".join(qas) for name, qas in qa_by_step.items()])
+
+    # ── Слепые зоны ──────────────────────────────────────────────────────────
+    blind_system = """Ты — опытный бизнес-психолог и стратег личного бренда.
+Твоя задача — увидеть в ответах эксперта то, чего он сам о себе не замечает.
+Это не комплименты и не критика — это объективный взгляд снаружи.
+
+Ответ верни СТРОГО в формате JSON (без markdown, без ```json):
+{
+  "hidden_strengths": [
+    {"title": "Название сильной стороны", "description": "1-2 предложения: что именно видно из ответов и почему это ценно"},
+    ...
+  ],
+  "blind_spots": [
+    {"title": "Название слепой зоны", "description": "1-2 предложения: что эксперт недооценивает или не замечает в себе"},
+    ...
+  ],
+  "patterns": "2-3 предложения: повторяющиеся паттерны мышления и поведения, которые прослеживаются в ответах",
+  "underused_potential": "2-3 предложения: ресурсы и возможности, которые эксперт имеет, но пока не использует на полную",
+  "risk_warning": "1-2 предложения: главный риск текущего позиционирования или подхода, который эксперт, вероятно, не видит"
+}
+
+Правила:
+- Только то, что реально видно из ответов. Никаких домыслов.
+- Конкретно и честно, без лести и без осуждения.
+- hidden_strengths и blind_spots — по 3-4 пункта каждый."""
+
+    blind_messages = [{"role": "user", "content": f"Интервью с экспертом:\n\n{full_text}\n\nПроанализируй и верни JSON со слепыми зонами и скрытыми сильными сторонами."}]
+    blind_raw = polza_chat(blind_messages, system_prompt=blind_system, temperature=0.6, max_tokens=1800)
+    blind_raw = blind_raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+    try:
+        blind_data = json.loads(blind_raw)
+    except Exception:
+        blind_data = {"raw": blind_raw}
+
+    # ── Маркетинговая стратегия ───────────────────────────────────────────────
+    strategy_system = """Ты — стратег по маркетингу личного бренда и продвижению экспертов.
+На основе распаковки составь конкретную маркетинговую стратегию продвижения.
+Не общие слова — только конкретные действия, каналы и форматы под этого конкретного эксперта.
+
+Ответ верни СТРОГО в формате JSON (без markdown, без ```json):
+{
+  "positioning_angle": "1-2 предложения: главный угол подачи — через что именно продвигаться, какой нарратив",
+  "primary_channels": [
+    {"channel": "Название канала", "why": "Почему подходит этому эксперту", "format": "Конкретный формат контента"},
+    ...
+  ],
+  "content_strategy": {
+    "weekly_rhythm": "Конкретный ритм публикаций: сколько постов в неделю, какие дни, какие форматы",
+    "hook_themes": ["Тема-крючок 1", "Тема-крючок 2", "Тема-крючок 3", "Тема-крючок 4", "Тема-крючок 5"],
+    "viral_mechanic": "1-2 предложения: что в этом эксперте может вызывать споры, обсуждение, репосты"
+  },
+  "lead_magnet": {
+    "idea": "Конкретная идея лид-магнита под этого эксперта",
+    "format": "Формат: чек-лист / гайд / мини-курс / шаблон / и т.д.",
+    "title": "Рабочий заголовок лид-магнита"
+  },
+  "first_product": {
+    "idea": "Идея первого или следующего продукта / услуги под текущую аудиторию",
+    "format": "Формат: консультация / мастермайнд / курс / практикум / и т.д.",
+    "price_range": "Примерный ценовой диапазон и обоснование",
+    "launch_mechanic": "Как запустить: через контент / вебинар / личные продажи / и т.д."
+  },
+  "quick_wins": [
+    "Действие 1 — что сделать в первые 7 дней",
+    "Действие 2 — что сделать в первые 7 дней",
+    "Действие 3 — что сделать в первые 7 дней"
+  ],
+  "growth_roadmap": [
+    {"period": "1 месяц", "focus": "На чём сфокусироваться", "goal": "Конкретная цель"},
+    {"period": "3 месяца", "focus": "На чём сфокусироваться", "goal": "Конкретная цель"},
+    {"period": "6 месяцев", "focus": "На чём сфокусироваться", "goal": "Конкретная цель"}
+  ]
+}
+
+Правила:
+- Всё строго под этого конкретного эксперта, его нишу и аудиторию.
+- primary_channels — 2-3 канала, не больше. Лучше меньше, но точнее.
+- quick_wins должны быть реально выполнимы за 7 дней.
+- Никаких общих советов вроде «публикуйте полезный контент»."""
+
+    strategy_messages = [{"role": "user", "content": f"Интервью с экспертом:\n\n{full_text}\n\nСоставь маркетинговую стратегию продвижения в JSON."}]
+    strategy_raw = polza_chat(strategy_messages, system_prompt=strategy_system, temperature=0.65, max_tokens=2000)
+    strategy_raw = strategy_raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+    try:
+        strategy_data = json.loads(strategy_raw)
+    except Exception:
+        strategy_data = {"raw": strategy_raw}
+
+    return ok({"insights": blind_data, "strategy": strategy_data})
 
 
 def get_session(session_id):

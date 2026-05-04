@@ -31,6 +31,10 @@ export async function generateFinal(sessionId: string): Promise<{ profile: Final
   return post("generate_final", { session_id: sessionId });
 }
 
+export async function generateInsights(sessionId: string): Promise<{ insights: BlindInsights; strategy: MarketingStrategy }> {
+  return post("generate_insights", { session_id: sessionId });
+}
+
 export interface Answer {
   question_id: string;
   question_text: string;
@@ -52,5 +56,50 @@ export interface FinalProfile {
   content_core: string;
   rubrics: string[];
   self_presentations: SelfPresentation[];
+  raw?: string;
+}
+
+export interface BlindInsights {
+  hidden_strengths: { title: string; description: string }[];
+  blind_spots: { title: string; description: string }[];
+  patterns: string;
+  underused_potential: string;
+  risk_warning: string;
+  raw?: string;
+}
+
+export interface MarketingChannel {
+  channel: string;
+  why: string;
+  format: string;
+}
+
+export interface RoadmapItem {
+  period: string;
+  focus: string;
+  goal: string;
+}
+
+export interface MarketingStrategy {
+  positioning_angle: string;
+  primary_channels: MarketingChannel[];
+  content_strategy: {
+    weekly_rhythm: string;
+    hook_themes: string[];
+    viral_mechanic: string;
+  };
+  lead_magnet: {
+    idea: string;
+    format: string;
+    title: string;
+  };
+  first_product: {
+    idea: string;
+    format: string;
+    price_range: string;
+    launch_mechanic: string;
+  };
+  quick_wins: string[];
+  growth_roadmap: RoadmapItem[];
   raw?: string;
 }
