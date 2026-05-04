@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Create session",
+      "method": "POST",
+      "path": "/?action=create_session",
+      "body": {"goal": "Запустить блог", "user_role": "expert"},
+      "expectedStatus": 200,
+      "expectedBody": {"session_id": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Unknown action returns error",
+      "method": "POST",
+      "path": "/?action=unknown",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

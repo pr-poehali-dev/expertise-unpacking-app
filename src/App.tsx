@@ -1,956 +1,859 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+import * as api from "@/api/expertise";
+import type { Answer, FinalProfile } from "@/api/expertise";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type Page = "home" | "profile" | "tests" | "results" | "admin" | "help" | "contacts" | "test-active";
+// ─── Step definitions ─────────────────────────────────────────────────────────
 
 interface Question {
-  id: number;
+  id: string;
   text: string;
-  options: string[];
-  correct: number;
+  hint?: string;
+  placeholder?: string;
+  type: "textarea" | "choice" | "chips";
+  options?: string[];
+  required?: boolean;
 }
 
-interface Test {
+interface Step {
   id: number;
   title: string;
-  description: string;
-  questions: number;
-  duration: string;
-  category: string;
-  difficulty: "Лёгкий" | "Средний" | "Сложный";
-  attempts: number;
+  subtitle: string;
+  why: string;
+  questions: Question[];
+  hasSummary?: boolean;
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const TESTS: Test[] = [
-  { id: 1, title: "Основы маркетинга", description: "Базовые концепции современного маркетинга и продвижения", questions: 15, duration: "20 мин", category: "Маркетинг", difficulty: "Лёгкий", attempts: 847 },
-  { id: 2, title: "Финансовая грамотность", description: "Управление личными финансами, инвестиции и бюджетирование", questions: 20, duration: "30 мин", category: "Финансы", difficulty: "Средний", attempts: 623 },
-  { id: 3, title: "Психология переговоров", description: "Техники убеждения, стратегии и психологические аспекты", questions: 25, duration: "40 мин", category: "Психология", difficulty: "Сложный", attempts: 391 },
-  { id: 4, title: "Управление проектами", description: "Методологии, инструменты и практики управления проектами", questions: 18, duration: "25 мин", category: "Менеджмент", difficulty: "Средний", attempts: 512 },
+const STEPS: Step[] = [
+  {
+    id: 1,
+    title: "Цель распаковки",
+    subtitle: "С чего начнём",
+    why: "Понимание вашей цели помогает сфокусировать весь сценарий на том, что действительно важно для вас прямо сейчас.",
+    questions: [
+      {
+        id: "goal_choice",
+        text: "Зачем вам сейчас нужна распаковка?",
+        type: "choice",
+        options: ["Запустить или развить блог", "Создать продукт или курс", "Повысить чек и ценность", "Сменить позиционирование", "Упаковать личный бренд", "Работа с клиентом / методология"],
+        required: true,
+      },
+      {
+        id: "goal_comment",
+        text: "Добавьте контекст, если хотите (необязательно)",
+        hint: "Например: «меняю нишу» или «первый раз упаковываю себя»",
+        placeholder: "Напишите, как если бы рассказывали знакомому...",
+        type: "textarea",
+      },
+    ],
+  },
+  {
+    id: 2,
+    title: "Личность",
+    subtitle: "Кто вы",
+    why: "Личностная основа — это фундамент позиционирования. Без неё любая упаковка остаётся пустой.",
+    questions: [
+      {
+        id: "who_now",
+        text: "Кто вы сейчас? Опишите себя в нескольких словах — без регалий",
+        hint: "Не ищите идеальную формулировку — сначала смысл",
+        placeholder: "Например: практик, который строит системы. Или: человек, который помогает другим думать яснее...",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "energizes",
+        text: "Что вас заряжает в работе? Когда вы в потоке?",
+        placeholder: "Можно коротко. Потом отредактируете.",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "qualities",
+        text: "Какие ваши качества отличают вас от большинства коллег?",
+        placeholder: "Приведите пример из реальной работы",
+        type: "textarea",
+      },
+      {
+        id: "transmit",
+        text: "Что вы хотите транслировать аудитории? Какие ценности или идеи?",
+        placeholder: "Не ищите идеальную формулировку — сначала смысл",
+        type: "textarea",
+      },
+    ],
+  },
+  {
+    id: 3,
+    title: "Путь эксперта",
+    subtitle: "Ваша история",
+    why: "История формирует доверие. Поворотные точки и ошибки — часто самый ценный материал для контента и позиционирования.",
+    hasSummary: true,
+    questions: [
+      {
+        id: "how_came",
+        text: "Как вы пришли в эту сферу? С чего началось?",
+        placeholder: "Напишите, как если бы рассказывали знакомому",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "key_events",
+        text: "Какие события или люди сильно на вас повлияли?",
+        placeholder: "Приведите пример из реальной работы",
+        type: "textarea",
+      },
+      {
+        id: "key_mistakes",
+        text: "Какие ошибки стали для вас ключевыми уроками?",
+        hint: "Ошибки — это золото. Именно они часто делают экспертизу настоящей",
+        placeholder: "Можно коротко. Потом отредактируете.",
+        type: "textarea",
+      },
+      {
+        id: "market_insights",
+        text: "Что вы поняли о рынке или клиентах, чего не понимают другие?",
+        placeholder: "Приведите пример из реальной работы",
+        type: "textarea",
+      },
+    ],
+  },
+  {
+    id: 4,
+    title: "Экспертность",
+    subtitle: "Ваша ценность",
+    why: "Здесь мы выясним, за что клиенты готовы платить и что вы делаете иначе, чем другие.",
+    questions: [
+      {
+        id: "tasks_solved",
+        text: "Какие конкретные задачи вы решаете для клиентов?",
+        hint: "Чем конкретнее — тем лучше",
+        placeholder: "Например: помогаю командам перестать тушить пожары и начать думать стратегически...",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "client_result",
+        text: "Какой результат получает клиент после работы с вами?",
+        placeholder: "Приведите пример из реальной работы",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "different",
+        text: "Что вы делаете иначе, чем большинство в вашей области?",
+        placeholder: "Не ищите идеальную формулировку — сначала смысл",
+        type: "textarea",
+      },
+      {
+        id: "methods",
+        text: "Какие методы или подходы вы используете?",
+        placeholder: "Можно перечислить",
+        type: "textarea",
+      },
+    ],
+  },
+  {
+    id: 5,
+    title: "Аудитория",
+    subtitle: "Ваш клиент",
+    why: "Чёткое понимание своей аудитории — это основа любого сильного позиционирования и контента.",
+    hasSummary: true,
+    questions: [
+      {
+        id: "ideal_client",
+        text: "Кто ваш идеальный клиент? Опишите его максимально конкретно",
+        hint: "Не демография, а образ человека: кем работает, что его волнует",
+        placeholder: "Например: предприниматель на стадии первых 5 млн, у которого есть команда, но нет системы...",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "client_state",
+        text: "В каком состоянии клиент приходит к вам? Что его беспокоит?",
+        placeholder: "Приведите пример из реальной работы",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "client_wants",
+        text: "Чего он хочет? Какой результат мечтает получить?",
+        placeholder: "Можно коротко. Потом отредактируете.",
+        type: "textarea",
+      },
+      {
+        id: "why_you",
+        text: "Почему клиент должен выбрать именно вас, а не другого специалиста?",
+        placeholder: "Не ищите идеальную формулировку — сначала смысл",
+        type: "textarea",
+      },
+    ],
+  },
+  {
+    id: 6,
+    title: "Позиционирование",
+    subtitle: "Ваша формула",
+    why: "Позиционирование — это короткий и ясный ответ на вопрос «кто вы, для кого и с каким результатом». Соберём его вместе.",
+    questions: [
+      {
+        id: "who_one_phrase",
+        text: "Кто вы в одной фразе? Попробуйте сформулировать прямо сейчас",
+        hint: "Это рабочая версия, не финальная. Просто попробуйте",
+        placeholder: "Например: помогаю экспертам превращать знания в продукты...",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "transformation",
+        text: "Какую трансформацию вы даёте клиенту? До → После",
+        placeholder: "До: хаос в голове и непонятный оффер. После: чёткое позиционирование и первые продажи...",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "approach",
+        text: "В чём особенность вашего подхода?",
+        placeholder: "Приведите пример из реальной работы",
+        type: "textarea",
+      },
+      {
+        id: "tone",
+        text: "Каким тоном вы хотите звучать?",
+        type: "choice",
+        options: ["Строго и экспертно", "Дружески и по-человечески", "Вдохновляюще и с энергией", "Прагматично и по делу", "С юмором и легко", "Философски и глубоко"],
+      },
+    ],
+  },
+  {
+    id: 7,
+    title: "Контент-ядро",
+    subtitle: "Смыслы для блога",
+    why: "Контент-ядро — это то, о чём вы будете говорить постоянно. Основа для блога, выступлений, продаж.",
+    hasSummary: true,
+    questions: [
+      {
+        id: "important_topics",
+        text: "О чём вам важно говорить? Что вас по-настоящему волнует?",
+        hint: "Не про тренды, а про то, что горит изнутри",
+        placeholder: "Например: про то, что большинство людей недооценивает свой опыт...",
+        type: "textarea",
+        required: true,
+      },
+      {
+        id: "audience_topics",
+        text: "Какие темы волнуют вашу аудиторию?",
+        placeholder: "Можно коротко. Потом отредактируете.",
+        type: "textarea",
+      },
+      {
+        id: "formats",
+        text: "Какие форматы контента вам комфортны?",
+        type: "chips",
+        options: ["Длинные тексты", "Короткие посты", "Видео", "Подкасты", "Сторис", "Разборы кейсов", "Личные истории", "Обучение / инструкции", "Мнения и позиции", "Интервью"],
+      },
+      {
+        id: "key_meanings",
+        text: "Какие 3–5 смыслов должны звучать в вашем контенте постоянно?",
+        hint: "Это основа вашего голоса",
+        placeholder: "Например: системность, честность про провалы, практика важнее теории...",
+        type: "textarea",
+      },
+    ],
+  },
 ];
 
-const SAMPLE_QUESTIONS: Question[] = [
-  { id: 1, text: "Что такое целевая аудитория в маркетинге?", options: ["Все потенциальные покупатели на рынке", "Группа людей, которой адресован продукт или услуга", "Аудитория рекламных показов", "База существующих клиентов"], correct: 1 },
-  { id: 2, text: "Какой из методов НЕ относится к digital-маркетингу?", options: ["SEO-продвижение", "Контекстная реклама", "Печатные буклеты", "Email-рассылки"], correct: 2 },
-  { id: 3, text: "Что означает аббревиатура CRM?", options: ["Content Resource Management", "Customer Relationship Management", "Creative Revenue Model", "Corporate Risk Management"], correct: 1 },
-];
+// ─── App state types ──────────────────────────────────────────────────────────
 
-const RESULTS = [
-  { test: "Основы маркетинга", score: 87, date: "28 апр 2026", time: "18 мин", status: "Отлично" },
-  { test: "Финансовая грамотность", score: 64, date: "22 апр 2026", time: "28 мин", status: "Хорошо" },
-  { test: "Управление проектами", score: 91, date: "15 апр 2026", time: "22 мин", status: "Отлично" },
-];
+type AppState = "landing" | "wizard" | "result";
 
-// ─── Nav ──────────────────────────────────────────────────────────────────────
+interface WizardState {
+  sessionId: string;
+  currentStep: number;
+  answers: Record<string, string>;
+  followups: Record<string, string>;
+  summaries: Record<number, string>;
+}
 
-const NAV_ITEMS: { key: Page; label: string; icon: string }[] = [
-  { key: "home", label: "Главная", icon: "Home" },
-  { key: "profile", label: "Кабинет", icon: "User" },
-  { key: "tests", label: "Тесты", icon: "FileQuestion" },
-  { key: "results", label: "Результаты", icon: "BarChart3" },
-  { key: "admin", label: "Админ", icon: "Settings2" },
-  { key: "help", label: "Помощь", icon: "HelpCircle" },
-  { key: "contacts", label: "Контакты", icon: "Mail" },
-];
+// ─── Utils ────────────────────────────────────────────────────────────────────
 
-// ─── Navigation ───────────────────────────────────────────────────────────────
+function copyText(text: string) {
+  navigator.clipboard.writeText(text).catch(() => {
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+  });
+}
 
-function Navigation({ current, onNav }: { current: Page; onNav: (p: Page) => void }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+// ─── Landing ──────────────────────────────────────────────────────────────────
+
+function Landing({ onStart, loading, error }: { onStart: () => void; loading: boolean; error: string }) {
+  const outcomes = [
+    { icon: "Fingerprint", label: "Личный код", desc: "Кто вы и в чём ваша суть" },
+    { icon: "Layers", label: "Экспертная зона", desc: "Что вы умеете лучше других" },
+    { icon: "Users", label: "Портрет аудитории", desc: "Кому вы по-настоящему нужны" },
+    { icon: "Crosshair", label: "Позиционирование", desc: "Формула: кто → для кого → результат" },
+    { icon: "Mic2", label: "3 самопрезентации", desc: "Короткая, средняя и развёрнутая" },
+    { icon: "LayoutGrid", label: "5 контент-рубрик", desc: "Основа для системного блога" },
+  ];
 
   return (
-    <header style={{ borderBottom: "1px solid hsl(var(--border))", backgroundColor: "rgba(14,12,10,0.9)", backdropFilter: "blur(12px)" }}
-      className="fixed top-0 left-0 right-0 z-50">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <button onClick={() => onNav("home")} className="flex items-center gap-3 group">
-          <div className="w-8 h-8 relative">
-            <div className="absolute inset-0 rotate-45 border border-gold opacity-60 group-hover:opacity-100 transition-opacity" style={{ borderColor: "var(--gold)" }} />
-            <div className="absolute inset-1.5 rotate-45" style={{ backgroundColor: "var(--gold)", opacity: 0.15 }} />
-            <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold" style={{ color: "var(--gold)" }}>T</span>
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+      <header className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: "var(--accent)", color: "var(--bg)" }}>
+            <Icon name="Sparkles" size={14} />
           </div>
-          <span className="font-display text-xl font-semibold tracking-wide" style={{ color: "hsl(var(--foreground))" }}>
-            Test<span style={{ color: "var(--gold)" }}>Lab</span>
-          </span>
-        </button>
+          <span className="font-semibold text-sm" style={{ color: "var(--fg)" }}>Распаковка экспертности</span>
+        </div>
+        <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "var(--surface2)", color: "var(--muted)" }}>Beta</span>
+      </header>
 
-        <nav className="hidden md:flex items-center gap-7">
-          {NAV_ITEMS.map(item => (
-            <button key={item.key} onClick={() => onNav(item.key)}
-              className={`nav-link ${current === item.key ? "active" : ""}`}>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="hidden md:flex items-center gap-3">
-          <span className="section-label">Иван С.</span>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{ backgroundColor: "var(--gold)", color: "var(--dark)" }}>
-            ИС
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
+        <div className="max-w-xl w-full text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs mb-8"
+            style={{ background: "var(--accent-subtle)", color: "var(--accent)", border: "1px solid var(--accent-border)" }}>
+            <Icon name="Zap" size={12} />
+            AI-assisted · 7 шагов · ~30 минут
           </div>
+
+          <h1 className="font-display mb-5 leading-tight" style={{ fontSize: "clamp(2.2rem, 5vw, 3.5rem)", color: "var(--fg)", fontWeight: 300 }}>
+            Узнайте, в чём ваша<br />
+            <span style={{ color: "var(--accent)" }}>настоящая экспертность</span>
+          </h1>
+
+          <p className="text-base leading-relaxed mb-10 mx-auto max-w-md" style={{ color: "var(--muted)" }}>
+            Пошаговый сценарий с AI-помощником. На выходе — готовый профиль для блога, сайта и продаж.
+          </p>
+
+          <button onClick={onStart} disabled={loading}
+            className="ex-btn-primary text-sm px-8 py-3.5 rounded-xl mb-3 flex items-center gap-2 mx-auto disabled:opacity-60">
+            {loading ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="ArrowRight" size={16} />}
+            {loading ? "Запускаем..." : "Начать распаковку"}
+          </button>
+
+          {error && <p className="text-sm mt-2 mb-2" style={{ color: "#ef4444" }}>{error}</p>}
+          <p className="text-xs" style={{ color: "var(--muted2)" }}>Бесплатно · Без регистрации · Результат сразу</p>
         </div>
 
-        <button className="md:hidden" style={{ color: "var(--gold)" }} onClick={() => setMobileOpen(!mobileOpen)}>
-          <Icon name={mobileOpen ? "X" : "Menu"} size={22} />
+        <div className="max-w-xl w-full mt-14">
+          <p className="text-xs text-center mb-5 uppercase tracking-widest" style={{ color: "var(--muted2)" }}>Что вы получите</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {outcomes.map((o, i) => (
+              <div key={i} className="ex-card rounded-xl p-4 text-left">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center mb-3" style={{ background: "var(--accent-subtle)" }}>
+                  <Icon name={o.icon} size={14} style={{ color: "var(--accent)" }} fallback="Star" />
+                </div>
+                <p className="text-sm font-medium mb-0.5" style={{ color: "var(--fg)" }}>{o.label}</p>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{o.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ─── ProgressBar ──────────────────────────────────────────────────────────────
+
+function ProgressBar({ step, total }: { step: number; total: number }) {
+  const pct = Math.round(((step - 1) / total) * 100);
+  return (
+    <div style={{ height: 2, background: "var(--border)", width: "100%" }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: "var(--accent)", transition: "width 0.5s cubic-bezier(.4,0,.2,1)" }} />
+    </div>
+  );
+}
+
+// ─── ChoiceCards ──────────────────────────────────────────────────────────────
+
+function ChoiceCards({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      {options.map(opt => (
+        <button key={opt} onClick={() => onChange(opt === value ? "" : opt)}
+          className="text-left px-4 py-3 rounded-xl text-sm transition-all"
+          style={{
+            background: value === opt ? "var(--accent-subtle)" : "var(--surface)",
+            border: `1.5px solid ${value === opt ? "var(--accent)" : "var(--border)"}`,
+            color: value === opt ? "var(--accent)" : "var(--fg)",
+          }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center"
+              style={{ border: `1.5px solid ${value === opt ? "var(--accent)" : "var(--border)"}` }}>
+              {value === opt && <div className="w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />}
+            </div>
+            {opt}
+          </div>
         </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Chips ────────────────────────────────────────────────────────────────────
+
+function Chips({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  const selected = value ? value.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const toggle = (opt: string) => {
+    const next = selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt];
+    onChange(next.join(", "));
+  };
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => {
+        const active = selected.includes(opt);
+        return (
+          <button key={opt} onClick={() => toggle(opt)}
+            className="px-3 py-1.5 rounded-full text-sm transition-all"
+            style={{
+              background: active ? "var(--accent-subtle)" : "var(--surface)",
+              border: `1.5px solid ${active ? "var(--accent)" : "var(--border)"}`,
+              color: active ? "var(--accent)" : "var(--muted)",
+            }}>
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── QuestionBlock ────────────────────────────────────────────────────────────
+
+function QuestionBlock({ question, value, onChange, followup, onFollowup, followupAnswer, onFollowupAnswer, isLoadingFollowup }: {
+  question: Question; value: string; onChange: (v: string) => void;
+  followup?: string; onFollowup: () => void; followupAnswer: string;
+  onFollowupAnswer: (v: string) => void; isLoadingFollowup: boolean;
+}) {
+  const [showHint, setShowHint] = useState(false);
+  return (
+    <div className="mb-8">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <label className="text-sm font-medium leading-snug" style={{ color: "var(--fg)" }}>
+          {question.text}
+          {question.required && <span style={{ color: "var(--accent)" }}> *</span>}
+        </label>
+        {question.hint && (
+          <button onClick={() => setShowHint(!showHint)} title="Подсказка"
+            className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all"
+            style={{ background: showHint ? "var(--accent-subtle)" : "var(--surface2)", color: showHint ? "var(--accent)" : "var(--muted)", border: "1px solid var(--border)" }}>
+            ?
+          </button>
+        )}
       </div>
 
-      {mobileOpen && (
-        <div className="md:hidden animate-fade-in" style={{ backgroundColor: "var(--surface)", borderTop: "1px solid hsl(var(--border))" }}>
-          {NAV_ITEMS.map(item => (
-            <button key={item.key} onClick={() => { onNav(item.key); setMobileOpen(false); }}
-              className="w-full flex items-center gap-3 px-6 py-3 text-left"
-              style={{ color: current === item.key ? "var(--gold)" : "var(--text-dim)", borderBottom: "1px solid hsl(var(--border))" }}>
-              <Icon name={item.icon} size={16} />
-              <span className="font-sans text-sm tracking-wide">{item.label}</span>
-            </button>
-          ))}
+      {showHint && question.hint && (
+        <div className="mb-3 px-3 py-2 rounded-lg text-xs leading-relaxed"
+          style={{ background: "var(--accent-subtle)", color: "var(--accent)", border: "1px solid var(--accent-border)" }}>
+          💡 {question.hint}
         </div>
       )}
-    </header>
-  );
-}
 
-// ─── Home Page ────────────────────────────────────────────────────────────────
+      {question.type === "textarea" && (
+        <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={question.placeholder} rows={4}
+          className="ex-textarea w-full rounded-xl text-sm resize-none" style={{ padding: "12px 14px" }}
+        />
+      )}
+      {question.type === "choice" && <ChoiceCards options={question.options || []} value={value} onChange={onChange} />}
+      {question.type === "chips" && <Chips options={question.options || []} value={value} onChange={onChange} />}
 
-function HomePage({ onNav }: { onNav: (p: Page) => void }) {
-  const stats = [
-    { value: "2 400+", label: "участников" },
-    { value: "38", label: "тестов" },
-    { value: "94%", label: "удовлетворённость" },
-    { value: "15", label: "категорий" },
-  ];
+      {question.type === "textarea" && value.length > 30 && !followup && !isLoadingFollowup && (
+        <button onClick={onFollowup} className="mt-2 text-xs flex items-center gap-1.5" style={{ color: "var(--muted2)" }}>
+          <Icon name="MessageCircle" size={12} />
+          Уточняющий вопрос от AI
+        </button>
+      )}
+      {isLoadingFollowup && (
+        <p className="mt-2 text-xs flex items-center gap-1.5" style={{ color: "var(--muted2)" }}>
+          <Icon name="Loader2" size={12} className="animate-spin" /> AI думает...
+        </p>
+      )}
 
-  return (
-    <div className="min-h-screen pt-16">
-      <section className="relative overflow-hidden grid-cross" style={{ minHeight: "90vh", display: "flex", alignItems: "center" }}>
-        <div className="absolute top-0 right-0 w-1/2 h-full opacity-20"
-          style={{ background: "radial-gradient(ellipse at top right, var(--gold) 0%, transparent 60%)" }} />
-        <div className="absolute bottom-0 left-0 w-96 h-96 opacity-10"
-          style={{ background: "radial-gradient(circle, var(--teal) 0%, transparent 70%)" }} />
-        <div className="absolute right-16 top-24 hidden lg:block">
-          <div className="w-px h-64 opacity-20" style={{ background: "linear-gradient(to bottom, var(--gold), transparent)" }} />
-        </div>
-        <div className="absolute right-32 top-36 hidden lg:block">
-          <div className="w-px h-48 opacity-10" style={{ background: "linear-gradient(to bottom, var(--gold), transparent)" }} />
-        </div>
-
-        <div className="max-w-7xl mx-auto px-6 py-24 relative z-10">
-          <div className="max-w-3xl">
-            <p className="section-label mb-6 animate-fade-up opacity-0" style={{ animationFillMode: "forwards" }}>
-              / платформа тестирования · 2026
-            </p>
-            <h1 className="font-display animate-fade-up opacity-0 delay-100 mb-6"
-              style={{ fontSize: "clamp(3rem, 8vw, 6rem)", lineHeight: 1.05, fontWeight: 300, animationFillMode: "forwards" }}>
-              Знания,<br />
-              <em style={{ color: "var(--gold)", fontStyle: "italic" }}>проверенные</em><br />
-              временем
-            </h1>
-            <p className="animate-fade-up opacity-0 delay-200 mb-10 max-w-lg leading-relaxed"
-              style={{ color: "var(--text-dim)", fontSize: "1.05rem", animationFillMode: "forwards" }}>
-              Создавайте и проходите тесты с автоматической проверкой. Отслеживайте прогресс и получайте детальную аналитику по каждому ответу.
-            </p>
-            <div className="flex flex-wrap gap-4 animate-fade-up opacity-0 delay-300" style={{ animationFillMode: "forwards" }}>
-              <button onClick={() => onNav("tests")} className="btn-gold px-8 py-3 rounded text-sm animate-pulse-gold">
-                Начать тестирование
-              </button>
-              <button onClick={() => onNav("profile")} className="btn-outline-gold px-8 py-3 rounded text-sm">
-                Мой кабинет
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section style={{ borderTop: "1px solid hsl(var(--border))", borderBottom: "1px solid hsl(var(--border))" }}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4">
-            {stats.map((s, i) => (
-              <div key={i} className="py-10 px-6 text-center"
-                style={{ borderRight: i < 3 ? "1px solid hsl(var(--border))" : "none" }}>
-                <div className="font-display text-4xl font-light mb-1" style={{ color: "var(--gold)" }}>{s.value}</div>
-                <div className="section-label">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="flex items-end justify-between mb-12">
-          <div>
-            <p className="section-label mb-3">/ доступные тесты</p>
-            <h2 className="font-display text-4xl font-light">Популярные курсы</h2>
-          </div>
-          <button onClick={() => onNav("tests")} className="btn-outline-gold px-6 py-2.5 rounded text-sm hidden md:block">
-            Все тесты →
-          </button>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {TESTS.map((test, i) => (
-            <div key={test.id} className="card-hover rounded p-6 bg-surface animate-fade-up opacity-0"
-              style={{ animationFillMode: "forwards", animationDelay: `${i * 0.1}s` }}>
-              <div className="flex items-start justify-between mb-4">
-                <span className="section-label">{test.category}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full font-mono"
-                  style={{
-                    backgroundColor: test.difficulty === "Лёгкий" ? "rgba(59,191,160,0.1)" : test.difficulty === "Сложный" ? "rgba(220,80,80,0.1)" : "rgba(212,168,71,0.1)",
-                    color: test.difficulty === "Лёгкий" ? "var(--teal)" : test.difficulty === "Сложный" ? "hsl(var(--destructive))" : "var(--gold)"
-                  }}>
-                  {test.difficulty}
-                </span>
-              </div>
-              <h3 className="font-display text-xl font-medium mb-2" style={{ color: "hsl(var(--foreground))" }}>{test.title}</h3>
-              <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--text-dim)" }}>{test.description}</p>
-              <div className="flex items-center justify-between text-xs mb-4" style={{ color: "var(--text-dim)" }}>
-                <span className="font-mono">{test.questions} вопр. · {test.duration}</span>
-                <span>{test.attempts} попыток</span>
-              </div>
-              <button onClick={() => onNav("test-active")}
-                className="w-full py-2.5 rounded text-sm font-medium transition-all"
-                style={{ backgroundColor: "rgba(212,168,71,0.08)", color: "var(--gold)", border: "1px solid rgba(212,168,71,0.2)" }}>
-                Пройти тест
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="max-w-7xl mx-auto px-6 pb-20">
-        <div className="relative overflow-hidden rounded p-12 text-center"
-          style={{ background: "linear-gradient(135deg, rgba(212,168,71,0.12), rgba(59,191,160,0.06))", border: "1px solid rgba(212,168,71,0.2)" }}>
-          <div className="absolute inset-0 grid-cross opacity-30" />
-          <p className="section-label mb-4 relative z-10">/ для администраторов</p>
-          <h2 className="font-display text-4xl font-light mb-4 relative z-10">Создайте свой тест<br /><em style={{ color: "var(--gold)" }}>за несколько минут</em></h2>
-          <p className="mb-8 relative z-10" style={{ color: "var(--text-dim)" }}>
-            Конструктор тестов с неограниченным количеством вопросов и автоматической проверкой
-          </p>
-          <button onClick={() => onNav("admin")} className="btn-gold px-10 py-3 rounded text-sm relative z-10">
-            Открыть конструктор
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Profile Page ─────────────────────────────────────────────────────────────
-
-function ProfilePage() {
-  const achievements = [
-    { icon: "Trophy", label: "Первый тест", earned: true },
-    { icon: "Flame", label: "3 дня подряд", earned: true },
-    { icon: "Star", label: "Отличник", earned: true },
-    { icon: "Zap", label: "Быстрый", earned: false },
-    { icon: "Crown", label: "Эксперт", earned: false },
-    { icon: "Award", label: "Топ-10", earned: false },
-  ];
-
-  return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-6">
-        <p className="section-label mb-2">/ личный кабинет</p>
-        <h1 className="font-display text-5xl font-light mb-12">Профиль</h1>
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="bg-surface rounded p-8" style={{ border: "1px solid hsl(var(--border))" }}>
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold font-display"
-                style={{ background: "linear-gradient(135deg, var(--gold), rgba(212,168,71,0.5))", color: "var(--dark)" }}>
-                ИС
-              </div>
-              <h2 className="font-display text-2xl font-medium mb-1">Иван Смирнов</h2>
-              <p className="text-sm" style={{ color: "var(--text-dim)" }}>ivan.smirnov@email.com</p>
-              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs"
-                style={{ backgroundColor: "rgba(212,168,71,0.1)", color: "var(--gold)" }}>
-                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "var(--gold)" }} />
-                Активен
-              </div>
-            </div>
-            <div className="space-y-4">
-              {[
-                { label: "Зарегистрирован", value: "12 янв 2026" },
-                { label: "Тестов пройдено", value: "12" },
-                { label: "Средний балл", value: "81%" },
-                { label: "Лучший результат", value: "96%" },
-              ].map((item, i) => (
-                <div key={i} className="flex justify-between items-center py-2.5"
-                  style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-                  <span className="text-sm" style={{ color: "var(--text-dim)" }}>{item.label}</span>
-                  <span className="text-sm font-medium font-mono" style={{ color: "hsl(var(--foreground))" }}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-            <button className="btn-outline-gold w-full mt-6 py-2.5 rounded text-sm">
-              Редактировать профиль
-            </button>
-          </div>
-
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-surface rounded p-6" style={{ border: "1px solid hsl(var(--border))" }}>
-              <p className="section-label mb-6">/ прогресс по категориям</p>
-              {[
-                { label: "Маркетинг", pct: 87, color: "var(--gold)" },
-                { label: "Финансы", pct: 64, color: "var(--teal)" },
-                { label: "Менеджмент", pct: 91, color: "var(--gold)" },
-                { label: "Психология", pct: 42, color: "rgba(212,168,71,0.5)" },
-              ].map((item, i) => (
-                <div key={i} className="mb-5">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm" style={{ color: "hsl(var(--foreground))" }}>{item.label}</span>
-                    <span className="font-mono text-sm" style={{ color: item.color }}>{item.pct}%</span>
-                  </div>
-                  <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${item.pct}%`, background: item.color }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-surface rounded p-6" style={{ border: "1px solid hsl(var(--border))" }}>
-              <p className="section-label mb-6">/ достижения</p>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-                {achievements.map((a, i) => (
-                  <div key={i} className="text-center">
-                    <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center"
-                      style={{
-                        backgroundColor: a.earned ? "rgba(212,168,71,0.15)" : "rgba(255,255,255,0.04)",
-                        border: `1px solid ${a.earned ? "rgba(212,168,71,0.3)" : "hsl(var(--border))"}`,
-                      }}>
-                      <Icon name={a.icon} size={18} fallback="Award"
-                        style={{ color: a.earned ? "var(--gold)" : "var(--text-dim)", opacity: a.earned ? 1 : 0.4 }} />
-                    </div>
-                    <p className="text-xs" style={{ color: a.earned ? "hsl(var(--foreground))" : "var(--text-dim)", opacity: a.earned ? 1 : 0.5 }}>
-                      {a.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-surface rounded p-6" style={{ border: "1px solid hsl(var(--border))" }}>
-              <p className="section-label mb-6">/ последняя активность</p>
-              {RESULTS.map((r, i) => (
-                <div key={i} className="flex items-center justify-between py-3"
-                  style={{ borderBottom: i < RESULTS.length - 1 ? "1px solid hsl(var(--border))" : "none" }}>
-                  <div>
-                    <p className="text-sm font-medium mb-0.5" style={{ color: "hsl(var(--foreground))" }}>{r.test}</p>
-                    <p className="text-xs font-mono" style={{ color: "var(--text-dim)" }}>{r.date} · {r.time}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-display text-xl font-medium" style={{ color: r.score >= 80 ? "var(--gold)" : r.score >= 60 ? "var(--teal)" : "hsl(var(--destructive))" }}>
-                      {r.score}%
-                    </div>
-                    <p className="text-xs" style={{ color: "var(--text-dim)" }}>{r.status}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Tests Page ───────────────────────────────────────────────────────────────
-
-function TestsPage({ onStart }: { onStart: () => void }) {
-  const [filter, setFilter] = useState("Все");
-  const categories = ["Все", "Маркетинг", "Финансы", "Психология", "Менеджмент"];
-  const filtered = filter === "Все" ? TESTS : TESTS.filter(t => t.category === filter);
-
-  return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-6">
-        <p className="section-label mb-2">/ каталог тестов</p>
-        <div className="flex flex-wrap items-end justify-between mb-8 gap-4">
-          <h1 className="font-display text-5xl font-light">Тесты</h1>
-          <p style={{ color: "var(--text-dim)" }} className="text-sm">{TESTS.length} теста доступно</p>
-        </div>
-
-        <div className="flex gap-3 mb-8 flex-wrap">
-          {categories.map(cat => (
-            <button key={cat} onClick={() => setFilter(cat)}
-              className="px-4 py-2 rounded text-sm font-medium transition-all"
-              style={{
-                backgroundColor: filter === cat ? "var(--gold)" : "rgba(255,255,255,0.04)",
-                color: filter === cat ? "var(--dark)" : "var(--text-dim)",
-                border: `1px solid ${filter === cat ? "var(--gold)" : "hsl(var(--border))"}`,
-              }}>
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative mb-10">
-          <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-dim)" }} />
-          <input type="text" placeholder="Поиск по названию или теме..."
-            className="w-full pl-11 pr-4 py-3 rounded text-sm outline-none"
-            style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}
+      {followup && (
+        <div className="mt-3 rounded-xl p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <p className="text-xs mb-2 font-medium" style={{ color: "var(--accent)" }}>↳ {followup}</p>
+          <textarea value={followupAnswer} onChange={e => onFollowupAnswer(e.target.value)}
+            placeholder="Ваш ответ..." rows={2}
+            className="ex-textarea w-full rounded-lg text-xs resize-none" style={{ padding: "8px 10px" }}
           />
         </div>
+      )}
+    </div>
+  );
+}
 
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filtered.map((test, i) => (
-            <div key={test.id} className="card-hover rounded p-7 bg-surface animate-fade-up opacity-0"
-              style={{ animationFillMode: "forwards", animationDelay: `${i * 0.08}s` }}>
-              <div className="flex items-start justify-between mb-5">
-                <div>
-                  <span className="section-label">{test.category}</span>
-                  <h3 className="font-display text-2xl font-medium mt-1" style={{ color: "hsl(var(--foreground))" }}>{test.title}</h3>
-                </div>
-                <span className="text-xs px-2.5 py-1 rounded-full font-mono flex-shrink-0 ml-3"
-                  style={{
-                    backgroundColor: test.difficulty === "Лёгкий" ? "rgba(59,191,160,0.1)" : test.difficulty === "Сложный" ? "rgba(220,80,80,0.1)" : "rgba(212,168,71,0.1)",
-                    color: test.difficulty === "Лёгкий" ? "var(--teal)" : test.difficulty === "Сложный" ? "hsl(var(--destructive))" : "var(--gold)"
-                  }}>
-                  {test.difficulty}
-                </span>
-              </div>
-              <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--text-dim)" }}>{test.description}</p>
-              <div className="flex items-center gap-4 mb-5 text-xs font-mono" style={{ color: "var(--text-dim)" }}>
-                <span className="flex items-center gap-1.5"><Icon name="HelpCircle" size={12} />{test.questions} вопросов</span>
-                <span className="flex items-center gap-1.5"><Icon name="Clock" size={12} />{test.duration}</span>
-                <span className="flex items-center gap-1.5"><Icon name="Users" size={12} />{test.attempts}</span>
-              </div>
-              <button onClick={onStart} className="btn-gold w-full py-3 rounded text-sm">Начать тест</button>
-            </div>
-          ))}
+// ─── Summary Screen ───────────────────────────────────────────────────────────
+
+function SummaryScreen({ stepId, text, isLoading, onContinue }: { stepId: number; text: string; isLoading: boolean; onContinue: () => void }) {
+  const stepName = STEPS.find(s => s.id === stepId)?.title || `Шаг ${stepId}`;
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6 py-16" style={{ background: "var(--bg)" }}>
+      <div className="max-w-xl w-full">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center mb-6" style={{ background: "var(--accent-subtle)" }}>
+          <Icon name="CheckCircle2" size={20} style={{ color: "var(--accent)" }} />
         </div>
+        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: "var(--muted2)" }}>Резюме блока · {stepName}</p>
+        <h2 className="font-display text-2xl font-light mb-6" style={{ color: "var(--fg)" }}>Что удалось выявить</h2>
+
+        <div className="ex-card rounded-2xl p-6 mb-6 min-h-24">
+          {isLoading ? (
+            <div className="flex items-center gap-3" style={{ color: "var(--muted)" }}>
+              <Icon name="Loader2" size={18} className="animate-spin" />
+              <span className="text-sm">AI составляет резюме...</span>
+            </div>
+          ) : (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--fg)", whiteSpace: "pre-wrap" }}>{text}</p>
+          )}
+        </div>
+
+        <button onClick={onContinue} disabled={isLoading}
+          className="ex-btn-primary px-6 py-3 rounded-xl text-sm w-full disabled:opacity-50">
+          Продолжить →
+        </button>
       </div>
     </div>
   );
 }
 
-// ─── Active Test Page ─────────────────────────────────────────────────────────
+// ─── Wizard ───────────────────────────────────────────────────────────────────
 
-function ActiveTestPage({ onFinish }: { onFinish: () => void }) {
-  const [current, setCurrent] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [answered, setAnswered] = useState<{ q: number; a: number }[]>([]);
-  const [showResult, setShowResult] = useState(false);
+function Wizard({ state, setState, onComplete }: {
+  state: WizardState;
+  setState: (s: WizardState) => void;
+  onComplete: (profile: FinalProfile) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [followupLoading, setFollowupLoading] = useState<string | null>(null);
+  const [summaryState, setSummaryState] = useState<{ show: boolean; loading: boolean; text: string }>({ show: false, loading: false, text: "" });
+  const [error, setError] = useState("");
 
-  const q = SAMPLE_QUESTIONS[current];
-  const pct = Math.round(((current + (showResult ? 1 : 0)) / SAMPLE_QUESTIONS.length) * 100);
+  const step = STEPS[state.currentStep - 1];
+  const isLastStep = state.currentStep === STEPS.length;
 
-  const handleSelect = (idx: number) => {
-    if (selected !== null) return;
-    setSelected(idx);
-    setTimeout(() => {
-      const newAnswered = [...answered, { q: current, a: idx }];
-      setAnswered(newAnswered);
-      if (current < SAMPLE_QUESTIONS.length - 1) {
-        setCurrent(current + 1);
-        setSelected(null);
-      } else {
-        setShowResult(true);
-      }
-    }, 900);
+  const setAnswer = useCallback((qId: string, val: string) => {
+    setState({ ...state, answers: { ...state.answers, [qId]: val } });
+  }, [state, setState]);
+
+  const setFollowupQ = useCallback((qId: string, followup: string) => {
+    setState({ ...state, followups: { ...state.followups, [qId]: followup } });
+  }, [state, setState]);
+
+  const setFollowupA = useCallback((qId: string, val: string) => {
+    setState({ ...state, answers: { ...state.answers, [`${qId}_followup`]: val } });
+  }, [state, setState]);
+
+  const requestFollowup = async (q: Question) => {
+    const answer = state.answers[q.id] || "";
+    if (!answer.trim() || followupLoading) return;
+    setFollowupLoading(q.id);
+    try {
+      const res = await api.generateFollowup(state.sessionId, step.id, q.text, answer);
+      if (res.followup) setFollowupQ(q.id, res.followup);
+    } catch (err: unknown) {
+      console.error("followup error", err);
+    }
+    setFollowupLoading(null);
   };
 
-  const correctCount = answered.filter(a => SAMPLE_QUESTIONS[a.q].correct === a.a).length;
-  const finalScore = Math.round((correctCount / SAMPLE_QUESTIONS.length) * 100);
+  const buildAnswers = (): Answer[] => {
+    const result: Answer[] = [];
+    for (const q of step.questions) {
+      const val = state.answers[q.id] || "";
+      if (val) result.push({ question_id: q.id, question_text: q.text, answer_text: val });
+      const fq = state.followups[q.id];
+      const fval = state.answers[`${q.id}_followup`] || "";
+      if (fq && fval) result.push({ question_id: `${q.id}_followup`, question_text: fq, answer_text: fval });
+    }
+    return result;
+  };
 
-  if (showResult) {
-    return (
-      <div className="min-h-screen pt-24 pb-16 flex items-center">
-        <div className="max-w-2xl mx-auto px-6 w-full text-center animate-fade-in">
-          <p className="section-label mb-6">/ тест завершён</p>
-          <div className="w-32 h-32 mx-auto mb-8 rounded-full flex items-center justify-center relative"
-            style={{ background: `conic-gradient(var(--gold) ${finalScore * 3.6}deg, var(--surface2) 0deg)` }}>
-            <div className="absolute inset-2 rounded-full flex flex-col items-center justify-center" style={{ backgroundColor: "var(--dark)" }}>
-              <div className="font-display text-3xl font-medium" style={{ color: "var(--gold)" }}>{finalScore}%</div>
-            </div>
-          </div>
-          <h2 className="font-display text-4xl font-light mb-3">
-            {finalScore >= 80 ? "Отличный результат!" : finalScore >= 60 ? "Хороший результат" : "Есть куда расти"}
-          </h2>
-          <p className="mb-8" style={{ color: "var(--text-dim)" }}>
-            Верных ответов: {correctCount} из {SAMPLE_QUESTIONS.length}
-          </p>
-          <div className="grid grid-cols-3 gap-4 mb-10">
-            {[
-              { label: "Верно", value: correctCount, color: "var(--teal)" },
-              { label: "Ошибок", value: SAMPLE_QUESTIONS.length - correctCount, color: "hsl(var(--destructive))" },
-              { label: "Время", value: "~2 мин", color: "var(--gold)" },
-            ].map((s, i) => (
-              <div key={i} className="bg-surface rounded p-4" style={{ border: "1px solid hsl(var(--border))" }}>
-                <div className="font-display text-2xl font-medium mb-1" style={{ color: s.color }}>{s.value}</div>
-                <div className="section-label">{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-4 justify-center">
-            <button onClick={onFinish} className="btn-gold px-8 py-3 rounded text-sm">Посмотреть результаты</button>
-            <button onClick={() => { setCurrent(0); setSelected(null); setAnswered([]); setShowResult(false); }}
-              className="btn-outline-gold px-8 py-3 rounded text-sm">
-              Пройти снова
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const handleNext = async () => {
+    const required = step.questions.filter(q => q.required);
+    for (const q of required) {
+      if (!state.answers[q.id]?.trim()) {
+        setError(`Пожалуйста, ответьте на вопрос: «${q.text}»`);
+        return;
+      }
+    }
+    setError("");
+    setLoading(true);
+    try {
+      await api.saveStep(state.sessionId, step.id, buildAnswers());
+      if (step.hasSummary) {
+        setSummaryState({ show: true, loading: true, text: "" });
+        setLoading(false);
+        const sumRes = await api.generateSummary(state.sessionId, step.id);
+        setSummaryState({ show: true, loading: false, text: sumRes.summary });
+        return;
+      }
+      if (isLastStep) {
+        const finalRes = await api.generateFinal(state.sessionId);
+        onComplete(finalRes.profile);
+      } else {
+        setState({ ...state, currentStep: state.currentStep + 1 });
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Произошла ошибка. Попробуйте ещё раз.");
+    }
+    setLoading(false);
+  };
+
+  const handleSummaryContinue = async () => {
+    setSummaryState({ show: false, loading: false, text: "" });
+    if (isLastStep) {
+      setLoading(true);
+      try {
+        const finalRes = await api.generateFinal(state.sessionId);
+        onComplete(finalRes.profile);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Ошибка генерации профиля.");
+      }
+      setLoading(false);
+    } else {
+      setState({ ...state, currentStep: state.currentStep + 1 });
+    }
+  };
+
+  if (summaryState.show) {
+    return <SummaryScreen stepId={step.id} text={summaryState.text} isLoading={summaryState.loading} onContinue={handleSummaryContinue} />;
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-2xl mx-auto px-6">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <p className="section-label mb-1">Основы маркетинга</p>
-            <p className="text-sm" style={{ color: "var(--text-dim)" }}>Вопрос {current + 1} из {SAMPLE_QUESTIONS.length}</p>
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+      <div style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "var(--accent)", color: "var(--bg)" }}>
+              <Icon name="Sparkles" size={11} />
+            </div>
+            <span className="text-xs font-medium" style={{ color: "var(--muted)" }}>Распаковка</span>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded" style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))" }}>
-            <Icon name="Clock" size={14} style={{ color: "var(--gold)" }} />
-            <span className="font-mono text-sm" style={{ color: "var(--gold)" }}>20:00</span>
+          <span className="text-xs font-mono" style={{ color: "var(--muted2)" }}>Шаг {state.currentStep} из {STEPS.length}</span>
+        </div>
+        <ProgressBar step={state.currentStep} total={STEPS.length} />
+      </div>
+
+      <div className="flex-1 max-w-2xl mx-auto w-full px-6 py-10">
+        <div key={step.id} style={{ animation: "fadeInUp 0.35s ease forwards" }}>
+          <div className="flex items-center gap-2 mb-6">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-mono font-bold"
+              style={{ background: "var(--accent)", color: "var(--bg)" }}>
+              {step.id}
+            </div>
+            <span className="text-xs uppercase tracking-widest" style={{ color: "var(--muted2)" }}>{step.subtitle}</span>
           </div>
-        </div>
 
-        <div className="progress-bar mb-10">
-          <div className="progress-fill" style={{ width: `${pct}%` }} />
-        </div>
-
-        <div key={current} className="animate-fade-in">
-          <h2 className="font-display text-3xl font-light leading-snug mb-10" style={{ color: "hsl(var(--foreground))" }}>
-            {q.text}
+          <h2 className="font-display mb-2" style={{ fontSize: "clamp(1.8rem, 4vw, 2.6rem)", color: "var(--fg)", fontWeight: 300, lineHeight: 1.2 }}>
+            {step.title}
           </h2>
-          <div className="space-y-3">
-            {q.options.map((opt, idx) => {
-              let extraStyle: React.CSSProperties = {};
-              if (selected !== null) {
-                if (idx === q.correct) {
-                  extraStyle = { borderColor: "var(--teal)", backgroundColor: "rgba(59,191,160,0.1)", color: "var(--teal)" };
-                } else if (idx === selected && idx !== q.correct) {
-                  extraStyle = { borderColor: "hsl(var(--destructive))", backgroundColor: "rgba(220,80,80,0.08)", color: "hsl(var(--destructive))" };
-                }
-              }
-              return (
-                <button key={idx} onClick={() => handleSelect(idx)}
-                  className="answer-option w-full text-left"
-                  style={selected !== null ? { ...extraStyle, cursor: "default" } : {}}>
-                  <div className="flex items-center gap-4">
-                    <span className="font-mono text-xs w-6 h-6 flex-shrink-0 flex items-center justify-center rounded-sm"
-                      style={{ border: "1px solid currentColor", opacity: 0.6 }}>
-                      {String.fromCharCode(65 + idx)}
-                    </span>
-                    <span className="text-sm">{opt}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--muted)" }}>{step.why}</p>
 
-        <div className="flex gap-2 justify-center mt-10">
-          {SAMPLE_QUESTIONS.map((_, i) => (
-            <div key={i} className="w-2 h-2 rounded-full transition-all"
-              style={{
-                backgroundColor: i <= current ? "var(--gold)" : "hsl(var(--border))",
-                opacity: i === current ? 1 : i < current ? 0.5 : 0.3,
-                transform: i === current ? "scale(1.4)" : "scale(1)",
-              }} />
+          {step.questions.map(q => (
+            <QuestionBlock
+              key={q.id}
+              question={q}
+              value={state.answers[q.id] || ""}
+              onChange={val => setAnswer(q.id, val)}
+              followup={state.followups[q.id]}
+              onFollowup={() => requestFollowup(q)}
+              followupAnswer={state.answers[`${q.id}_followup`] || ""}
+              onFollowupAnswer={val => setFollowupA(q.id, val)}
+              isLoadingFollowup={followupLoading === q.id}
+            />
           ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// ─── Results Page ─────────────────────────────────────────────────────────────
-
-function ResultsPage() {
-  const avg = Math.round(RESULTS.reduce((a, r) => a + r.score, 0) / RESULTS.length);
-
-  return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-6">
-        <p className="section-label mb-2">/ история</p>
-        <h1 className="font-display text-5xl font-light mb-12">Результаты</h1>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-          {[
-            { label: "Средний балл", value: `${avg}%`, icon: "TrendingUp" },
-            { label: "Тестов пройдено", value: "12", icon: "CheckCircle" },
-            { label: "Лучший результат", value: "96%", icon: "Trophy" },
-            { label: "Время обучения", value: "4.2 ч", icon: "Clock" },
-          ].map((s, i) => (
-            <div key={i} className="bg-surface rounded p-5 animate-fade-up opacity-0"
-              style={{ border: "1px solid hsl(var(--border))", animationFillMode: "forwards", animationDelay: `${i * 0.08}s` }}>
-              <Icon name={s.icon} size={20} style={{ color: "var(--gold)" }} fallback="Star" className="mb-3" />
-              <div className="font-display text-3xl font-light mb-1" style={{ color: "var(--gold)" }}>{s.value}</div>
-              <div className="section-label">{s.label}</div>
+          {error && (
+            <div className="mb-5 px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(239,68,68,0.08)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.2)" }}>
+              {error}
             </div>
-          ))}
-        </div>
+          )}
 
-        <div className="bg-surface rounded overflow-hidden" style={{ border: "1px solid hsl(var(--border))" }}>
-          <div className="px-6 py-4" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-            <p className="section-label">/ все попытки</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-                  {["Тест", "Дата", "Время", "Результат", "Статус", ""].map((h, i) => (
-                    <th key={i} className="text-left px-6 py-3 section-label font-normal">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {RESULTS.map((r, i) => (
-                  <tr key={i} className="transition-colors hover:bg-surface2"
-                    style={{ borderBottom: i < RESULTS.length - 1 ? "1px solid hsl(var(--border))" : "none" }}>
-                    <td className="px-6 py-4"><span className="font-medium text-sm" style={{ color: "hsl(var(--foreground))" }}>{r.test}</span></td>
-                    <td className="px-6 py-4 font-mono text-xs" style={{ color: "var(--text-dim)" }}>{r.date}</td>
-                    <td className="px-6 py-4 font-mono text-xs" style={{ color: "var(--text-dim)" }}>{r.time}</td>
-                    <td className="px-6 py-4">
-                      <span className="font-display text-2xl font-medium"
-                        style={{ color: r.score >= 80 ? "var(--gold)" : r.score >= 60 ? "var(--teal)" : "hsl(var(--destructive))" }}>
-                        {r.score}%
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs px-2.5 py-1 rounded-full font-mono"
-                        style={{ backgroundColor: r.score >= 80 ? "rgba(212,168,71,0.1)" : "rgba(59,191,160,0.1)", color: r.score >= 80 ? "var(--gold)" : "var(--teal)" }}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button className="text-xs font-mono" style={{ color: "var(--text-dim)" }}>Детали →</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Admin Page ───────────────────────────────────────────────────────────────
-
-function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"tests" | "users" | "create">("tests");
-
-  return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex items-center gap-3 mb-2">
-          <p className="section-label">/ администратор</p>
-          <span className="text-xs px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "rgba(212,168,71,0.1)", color: "var(--gold)" }}>полный доступ</span>
-        </div>
-        <h1 className="font-display text-5xl font-light mb-10">Панель управления</h1>
-
-        <div className="flex gap-0 mb-10" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-          {([
-            { key: "tests" as const, label: "Тесты", icon: "FileQuestion" },
-            { key: "users" as const, label: "Пользователи", icon: "Users" },
-            { key: "create" as const, label: "Создать тест", icon: "Plus" },
-          ]).map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-2 px-6 py-4 text-sm relative transition-colors"
-              style={{ color: activeTab === tab.key ? "var(--gold)" : "var(--text-dim)" }}>
-              <Icon name={tab.icon} size={15} />
-              {tab.label}
-              {activeTab === tab.key && (
-                <div className="absolute bottom-0 left-0 right-0 h-px" style={{ backgroundColor: "var(--gold)" }} />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "tests" && (
-          <div className="animate-fade-in space-y-4">
-            {TESTS.map((test) => (
-              <div key={test.id} className="bg-surface rounded p-5 flex items-center justify-between"
-                style={{ border: "1px solid hsl(var(--border))" }}>
-                <div className="flex items-center gap-5">
-                  <div className="w-10 h-10 flex items-center justify-center rounded"
-                    style={{ backgroundColor: "rgba(212,168,71,0.1)", color: "var(--gold)" }}>
-                    <Icon name="FileQuestion" size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-0.5" style={{ color: "hsl(var(--foreground))" }}>{test.title}</h3>
-                    <p className="text-xs font-mono" style={{ color: "var(--text-dim)" }}>
-                      {test.questions} вопросов · {test.category} · {test.attempts} попыток
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs px-2.5 py-1 rounded-full font-mono" style={{ backgroundColor: "rgba(59,191,160,0.1)", color: "var(--teal)" }}>Активен</span>
-                  <button className="btn-outline-gold px-4 py-1.5 rounded text-xs">Изменить</button>
-                  <button className="text-xs px-4 py-1.5 rounded" style={{ color: "hsl(var(--destructive))", border: "1px solid rgba(220,80,80,0.2)" }}>Удалить</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === "users" && (
-          <div className="animate-fade-in bg-surface rounded overflow-hidden" style={{ border: "1px solid hsl(var(--border))" }}>
-            {[
-              { name: "Иван Смирнов", email: "ivan@email.com", tests: 12, avg: "81%", joined: "12 янв" },
-              { name: "Мария Петрова", email: "maria@email.com", tests: 8, avg: "74%", joined: "3 фев" },
-              { name: "Алексей Козлов", email: "alex@email.com", tests: 21, avg: "89%", joined: "28 янв" },
-              { name: "Елена Новикова", email: "elena@email.com", tests: 5, avg: "66%", joined: "15 мар" },
-            ].map((u, i) => (
-              <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-surface2 transition-colors"
-                style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold font-display"
-                    style={{ backgroundColor: "rgba(212,168,71,0.15)", color: "var(--gold)" }}>
-                    {u.name.split(" ").map(n => n[0]).join("")}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: "hsl(var(--foreground))" }}>{u.name}</p>
-                    <p className="text-xs font-mono" style={{ color: "var(--text-dim)" }}>{u.email}</p>
-                  </div>
-                </div>
-                <div className="hidden md:flex items-center gap-8 text-xs font-mono" style={{ color: "var(--text-dim)" }}>
-                  <span>Тестов: <span style={{ color: "hsl(var(--foreground))" }}>{u.tests}</span></span>
-                  <span>Средний: <span style={{ color: "var(--gold)" }}>{u.avg}</span></span>
-                  <span>С {u.joined}</span>
-                </div>
-                <button className="btn-outline-gold px-3 py-1.5 rounded text-xs">Профиль</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === "create" && (
-          <div className="animate-fade-in max-w-2xl">
-            <p className="section-label mb-6">/ конструктор тестов</p>
-            <div className="space-y-5">
-              {[
-                { label: "Название теста", placeholder: "Например: Основы Python" },
-                { label: "Описание", placeholder: "Краткое описание содержания теста" },
-              ].map((f, i) => (
-                <div key={i}>
-                  <label className="section-label block mb-2">{f.label}</label>
-                  <input type="text" placeholder={f.placeholder}
-                    className="w-full px-4 py-3 rounded text-sm outline-none"
-                    style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}
-                    onFocus={e => (e.target.style.borderColor = "rgba(212,168,71,0.5)")}
-                    onBlur={e => (e.target.style.borderColor = "hsl(var(--border))")}
-                  />
-                </div>
-              ))}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="section-label block mb-2">Категория</label>
-                  <select className="w-full px-4 py-3 rounded text-sm outline-none"
-                    style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}>
-                    {["Маркетинг", "Финансы", "Психология", "Менеджмент"].map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="section-label block mb-2">Сложность</label>
-                  <select className="w-full px-4 py-3 rounded text-sm outline-none"
-                    style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}>
-                    {["Лёгкий", "Средний", "Сложный"].map(d => <option key={d}>{d}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="rounded p-5" style={{ border: "1px dashed rgba(212,168,71,0.3)", backgroundColor: "rgba(212,168,71,0.03)" }}>
-                <p className="section-label mb-4">+ добавить вопрос</p>
-                <textarea placeholder="Введите текст вопроса..." rows={3}
-                  className="w-full px-4 py-3 rounded text-sm outline-none resize-none"
-                  style={{ backgroundColor: "var(--surface)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}
-                />
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  {["Вариант A", "Вариант B", "Вариант C", "Вариант D"].map(p => (
-                    <input key={p} type="text" placeholder={p}
-                      className="px-3 py-2 rounded text-sm outline-none"
-                      style={{ backgroundColor: "var(--surface)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }} />
-                  ))}
-                </div>
-                <button className="btn-outline-gold w-full py-2.5 rounded text-sm mt-4">Добавить вопрос</button>
-              </div>
-              <button className="btn-gold w-full py-3 rounded text-sm">Сохранить тест</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Help Page ────────────────────────────────────────────────────────────────
-
-function HelpPage() {
-  const [open, setOpen] = useState<number | null>(null);
-  const faq = [
-    { q: "Как начать проходить тест?", a: "Перейдите в раздел «Тесты», выберите интересующую тему и нажмите «Начать тест». Тест начнётся немедленно — каждый вопрос отображается по одному." },
-    { q: "Как сохраняются результаты?", a: "Результаты сохраняются автоматически после завершения теста. Вы найдёте все попытки в разделе «Результаты» с подробной статистикой." },
-    { q: "Можно ли пройти тест повторно?", a: "Да, любой тест можно пройти неограниченное количество раз. Все попытки сохраняются в истории." },
-    { q: "Как создать собственный тест?", a: "В разделе «Админ-панель» нажмите «Создать тест». Заполните название, описание и добавьте вопросы через конструктор." },
-    { q: "Что такое достижения?", a: "Достижения — это награды за определённые действия: первый пройденный тест, серия дней активности, высокие баллы и другие успехи." },
-    { q: "Как изменить данные профиля?", a: "В разделе «Личный кабинет» нажмите «Редактировать профиль». Вы можете изменить имя, email и аватар." },
-  ];
-
-  return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-3xl mx-auto px-6">
-        <p className="section-label mb-2">/ центр поддержки</p>
-        <h1 className="font-display text-5xl font-light mb-3">Помощь</h1>
-        <p className="mb-12" style={{ color: "var(--text-dim)" }}>Ответы на часто задаваемые вопросы</p>
-        <div className="space-y-2">
-          {faq.map((item, i) => (
-            <div key={i} className="bg-surface rounded overflow-hidden"
-              style={{ border: `1px solid ${open === i ? "rgba(212,168,71,0.3)" : "hsl(var(--border))"}` }}>
-              <button className="w-full flex items-center justify-between px-6 py-5 text-left"
-                onClick={() => setOpen(open === i ? null : i)}>
-                <span className="font-medium" style={{ color: "hsl(var(--foreground))" }}>{item.q}</span>
-                <Icon name={open === i ? "ChevronUp" : "ChevronDown"} size={16} style={{ color: "var(--gold)", flexShrink: 0, marginLeft: "16px" }} />
+          <div className="flex items-center justify-between pt-4 mt-2" style={{ borderTop: "1px solid var(--border)" }}>
+            {state.currentStep > 1 ? (
+              <button onClick={() => setState({ ...state, currentStep: state.currentStep - 1 })}
+                className="flex items-center gap-1.5 text-sm" style={{ color: "var(--muted)" }}>
+                <Icon name="ArrowLeft" size={15} /> Назад
               </button>
-              {open === i && (
-                <div className="px-6 pb-5 animate-fade-in">
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>{item.a}</p>
-                </div>
-              )}
-            </div>
+            ) : <div />}
+
+            <button onClick={handleNext} disabled={loading}
+              className="ex-btn-primary px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 disabled:opacity-60">
+              {loading && <Icon name="Loader2" size={15} className="animate-spin" />}
+              {isLastStep ? (loading ? "Создаём профиль..." : "Сформировать результат ✦") : "Далее"}
+              {!loading && !isLastStep && <Icon name="ArrowRight" size={15} />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ResultBlock ──────────────────────────────────────────────────────────────
+
+function ResultBlock({ title, icon, content }: { title: string; icon: string; content: string | string[] }) {
+  const [copied, setCopied] = useState(false);
+  const text = Array.isArray(content) ? content.join("\n") : content;
+  const handleCopy = () => { copyText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  return (
+    <div className="ex-card rounded-2xl p-5 mb-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Icon name={icon} size={15} style={{ color: "var(--accent)" }} fallback="Star" />
+          <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>{title}</h3>
+        </div>
+        <button onClick={handleCopy} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all"
+          style={{ background: copied ? "var(--accent-subtle)" : "var(--surface2)", color: copied ? "var(--accent)" : "var(--muted)" }}>
+          <Icon name={copied ? "Check" : "Copy"} size={11} />
+          {copied ? "Скопировано" : "Копировать"}
+        </button>
+      </div>
+      {Array.isArray(content) ? (
+        <ul className="space-y-1.5">
+          {content.map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "var(--fg)" }}>
+              <span style={{ color: "var(--accent)", marginTop: 3, flexShrink: 0 }}>·</span>{item}
+            </li>
           ))}
-        </div>
-        <div className="mt-12 rounded p-8 text-center"
-          style={{ background: "linear-gradient(135deg, rgba(212,168,71,0.08), rgba(59,191,160,0.04))", border: "1px solid rgba(212,168,71,0.15)" }}>
-          <Icon name="MessageCircle" size={28} style={{ color: "var(--gold)" }} className="mx-auto mb-4" />
-          <h3 className="font-display text-2xl font-light mb-2">Не нашли ответ?</h3>
-          <p className="text-sm mb-5" style={{ color: "var(--text-dim)" }}>Напишите нам — ответим в течение рабочего дня</p>
-          <button className="btn-gold px-8 py-2.5 rounded text-sm">Написать в поддержку</button>
-        </div>
-      </div>
+        </ul>
+      ) : (
+        <p className="text-sm leading-relaxed" style={{ color: "var(--fg)", whiteSpace: "pre-wrap" }}>{content}</p>
+      )}
     </div>
   );
 }
 
-// ─── Contacts Page ────────────────────────────────────────────────────────────
+// ─── Result Screen ────────────────────────────────────────────────────────────
 
-function ContactsPage() {
+function ResultScreen({ profile, onRestart }: { profile: FinalProfile; onRestart: () => void }) {
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const fullText = [
+    "ПРОФИЛЬ ЭКСПЕРТА\n",
+    `ЛИЧНЫЙ КОД\n${profile.personal_code}`,
+    `ЭКСПЕРТНАЯ ЗОНА\n${profile.expert_zone}`,
+    `ПОРТРЕТ АУДИТОРИИ\n${profile.audience_profile}`,
+    `ПОЗИЦИОНИРОВАНИЕ\n${profile.positioning}`,
+    `ТОН ОБЩЕНИЯ\n${profile.tone_of_voice}`,
+    `КОНТЕНТ-ЯДРО\n${profile.content_core}`,
+    `КОНТЕНТ-РУБРИКИ\n${(profile.rubrics || []).map((r, i) => `${i + 1}. ${r}`).join("\n")}`,
+    `САМОПРЕЗЕНТАЦИИ\n${(profile.self_presentations || []).map(s => `[${s.length}]\n${s.text}`).join("\n\n")}`,
+  ].join("\n\n");
+
+  const handleDownload = () => {
+    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "профиль-эксперта.txt"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-6">
-        <p className="section-label mb-2">/ свяжитесь с нами</p>
-        <h1 className="font-display text-5xl font-light mb-12">Контакты</h1>
-        <div className="grid lg:grid-cols-2 gap-12">
-          <div>
-            <p className="text-lg leading-relaxed mb-10" style={{ color: "var(--text-dim)" }}>
-              Есть вопросы о платформе или предложения по улучшению? Мы всегда рады обратной связи от наших пользователей.
-            </p>
-            <div className="space-y-6">
-              {[
-                { icon: "Mail", label: "Email", value: "hello@testlab.ru" },
-                { icon: "Phone", label: "Телефон", value: "+7 (495) 123-45-67" },
-                { icon: "MapPin", label: "Адрес", value: "Москва, ул. Тверская, 16" },
-                { icon: "Clock", label: "Часы работы", value: "Пн-Пт, 9:00–18:00" },
-              ].map((c, i) => (
-                <div key={i} className="flex items-start gap-4">
-                  <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded"
-                    style={{ backgroundColor: "rgba(212,168,71,0.1)", border: "1px solid rgba(212,168,71,0.2)" }}>
-                    <Icon name={c.icon} size={16} style={{ color: "var(--gold)" }} />
-                  </div>
-                  <div>
-                    <p className="section-label mb-0.5">{c.label}</p>
-                    <p style={{ color: "hsl(var(--foreground))" }}>{c.value}</p>
-                  </div>
-                </div>
-              ))}
+    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <div style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 40 }}>
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "var(--accent)", color: "var(--bg)" }}>
+              <Icon name="Sparkles" size={11} />
             </div>
+            <span className="text-xs font-medium" style={{ color: "var(--muted)" }}>Профиль готов</span>
           </div>
-          <div className="bg-surface rounded p-8" style={{ border: "1px solid hsl(var(--border))" }}>
-            <p className="section-label mb-6">/ форма обратной связи</p>
-            <div className="space-y-4">
-              {[
-                { label: "Ваше имя", placeholder: "Иван Смирнов" },
-                { label: "Email", placeholder: "ivan@email.com" },
-                { label: "Тема", placeholder: "Вопрос / предложение / ошибка" },
-              ].map((f, i) => (
-                <div key={i}>
-                  <label className="section-label block mb-2">{f.label}</label>
-                  <input type="text" placeholder={f.placeholder}
-                    className="w-full px-4 py-3 rounded text-sm outline-none transition-all"
-                    style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}
-                    onFocus={e => (e.target.style.borderColor = "rgba(212,168,71,0.5)")}
-                    onBlur={e => (e.target.style.borderColor = "hsl(var(--border))")}
-                  />
+          <div className="flex items-center gap-2">
+            <button onClick={handleDownload} className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+              style={{ background: "var(--surface2)", color: "var(--muted)", border: "1px solid var(--border)" }}>
+              <Icon name="Download" size={12} /> Скачать
+            </button>
+            <button onClick={() => { copyText(fullText); setCopiedAll(true); setTimeout(() => setCopiedAll(false), 2500); }}
+              className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
+              style={{ background: copiedAll ? "var(--accent-subtle)" : "var(--accent)", color: copiedAll ? "var(--accent)" : "var(--bg)" }}>
+              <Icon name={copiedAll ? "Check" : "Copy"} size={12} />
+              {copiedAll ? "Скопировано!" : "Копировать всё"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-6 py-10">
+        <div className="mb-8">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4" style={{ background: "var(--accent-subtle)" }}>
+            <Icon name="Trophy" size={20} style={{ color: "var(--accent)" }} />
+          </div>
+          <h1 className="font-display text-3xl font-light mb-1" style={{ color: "var(--fg)" }}>Ваш профиль эксперта</h1>
+          <p className="text-sm" style={{ color: "var(--muted)" }}>Используйте в блоге, на сайте и в продажах</p>
+        </div>
+
+        <ResultBlock title="Личный код" icon="Fingerprint" content={profile.personal_code || "—"} />
+        <ResultBlock title="Экспертная зона" icon="Layers" content={profile.expert_zone || "—"} />
+        <ResultBlock title="Портрет аудитории" icon="Users" content={profile.audience_profile || "—"} />
+        <ResultBlock title="Позиционирование" icon="Crosshair" content={profile.positioning || "—"} />
+        <ResultBlock title="Тон общения" icon="MessageSquare" content={profile.tone_of_voice || "—"} />
+        <ResultBlock title="Контент-ядро" icon="Flame" content={profile.content_core || "—"} />
+        {(profile.rubrics?.length ?? 0) > 0 && (
+          <ResultBlock title="5 контент-рубрик" icon="LayoutGrid" content={profile.rubrics} />
+        )}
+
+        {(profile.self_presentations?.length ?? 0) > 0 && (
+          <div className="ex-card rounded-2xl p-5 mb-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Icon name="Mic2" size={15} style={{ color: "var(--accent)" }} />
+              <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Самопрезентации</h3>
+            </div>
+            {profile.self_presentations.map((sp, i) => (
+              <div key={i} className="mb-4 last:mb-0">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs uppercase tracking-wider" style={{ color: "var(--muted2)" }}>{sp.length}</p>
+                  <button onClick={() => copyText(sp.text)} className="text-xs" style={{ color: "var(--muted)" }}>Скопировать</button>
                 </div>
-              ))}
-              <div>
-                <label className="section-label block mb-2">Сообщение</label>
-                <textarea rows={5} placeholder="Опишите ваш вопрос подробнее..."
-                  className="w-full px-4 py-3 rounded text-sm outline-none resize-none"
-                  style={{ backgroundColor: "var(--surface2)", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", fontFamily: "Golos Text, sans-serif" }}
-                  onFocus={e => (e.target.style.borderColor = "rgba(212,168,71,0.5)")}
-                  onBlur={e => (e.target.style.borderColor = "hsl(var(--border))")}
-                />
+                <p className="text-sm leading-relaxed" style={{ color: "var(--fg)" }}>{sp.text}</p>
+                {i < profile.self_presentations.length - 1 && <div className="mt-4" style={{ borderTop: "1px solid var(--border)" }} />}
               </div>
-              <button className="btn-gold w-full py-3 rounded text-sm">Отправить сообщение</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Footer ───────────────────────────────────────────────────────────────────
-
-function Footer({ onNav }: { onNav: (p: Page) => void }) {
-  return (
-    <footer style={{ borderTop: "1px solid hsl(var(--border))", backgroundColor: "var(--surface)" }}>
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 relative">
-              <div className="absolute inset-0 rotate-45 border" style={{ borderColor: "var(--gold)", opacity: 0.5 }} />
-              <span className="absolute inset-0 flex items-center justify-center font-mono text-xs" style={{ color: "var(--gold)" }}>T</span>
-            </div>
-            <span className="font-display text-lg" style={{ color: "hsl(var(--foreground))" }}>
-              Test<span style={{ color: "var(--gold)" }}>Lab</span>
-            </span>
-          </div>
-          <div className="flex gap-6">
-            {NAV_ITEMS.slice(0, 5).map(item => (
-              <button key={item.key} onClick={() => onNav(item.key)} className="nav-link text-xs">{item.label}</button>
             ))}
           </div>
-          <p className="font-mono text-xs" style={{ color: "var(--text-dim)" }}>© 2026 TestLab</p>
+        )}
+
+        <div className="mt-8 p-6 rounded-2xl text-center" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <p className="text-sm font-medium mb-1" style={{ color: "var(--fg)" }}>Хотите пройти ещё раз?</p>
+          <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>Начните новую сессию — всё начнётся с чистого листа</p>
+          <button onClick={onRestart} className="text-sm px-5 py-2.5 rounded-xl"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--fg)" }}>
+            Начать заново
+          </button>
         </div>
       </div>
-    </footer>
+    </div>
   );
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
-export default function App() {
-  const [page, setPage] = useState<Page>("home");
+const EMPTY_WIZARD: WizardState = { sessionId: "", currentStep: 1, answers: {}, followups: {}, summaries: {} };
 
-  const navigate = (p: Page) => {
-    setPage(p);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+export default function App() {
+  const [appState, setAppState] = useState<AppState>("landing");
+  const [wizardState, setWizardState] = useState<WizardState>(EMPTY_WIZARD);
+  const [finalProfile, setFinalProfile] = useState<FinalProfile | null>(null);
+  const [startLoading, setStartLoading] = useState(false);
+  const [startError, setStartError] = useState("");
+
+  const handleStart = async () => {
+    setStartLoading(true); setStartError("");
+    try {
+      const res = await api.createSession("", "expert");
+      setWizardState({ ...EMPTY_WIZARD, sessionId: res.session_id });
+      setAppState("wizard");
+    } catch (e: unknown) {
+      setStartError(e instanceof Error ? e.message : "Ошибка соединения. Попробуйте ещё раз.");
+    }
+    setStartLoading(false);
   };
 
-  return (
-    <div style={{ backgroundColor: "var(--dark)", minHeight: "100vh" }}>
-      <Navigation current={page === "test-active" ? "tests" : page} onNav={navigate} />
-      <main>
-        {page === "home" && <HomePage onNav={navigate} />}
-        {page === "profile" && <ProfilePage />}
-        {page === "tests" && <TestsPage onStart={() => navigate("test-active")} />}
-        {page === "test-active" && <ActiveTestPage onFinish={() => navigate("results")} />}
-        {page === "results" && <ResultsPage />}
-        {page === "admin" && <AdminPage />}
-        {page === "help" && <HelpPage />}
-        {page === "contacts" && <ContactsPage />}
-      </main>
-      {page !== "test-active" && <Footer onNav={navigate} />}
-    </div>
-  );
+  const handleComplete = (profile: FinalProfile) => { setFinalProfile(profile); setAppState("result"); };
+  const handleRestart = () => { setWizardState(EMPTY_WIZARD); setFinalProfile(null); setAppState("landing"); };
+
+  if (appState === "landing") return <Landing onStart={handleStart} loading={startLoading} error={startError} />;
+  if (appState === "wizard") return <Wizard state={wizardState} setState={setWizardState} onComplete={handleComplete} />;
+  if (appState === "result" && finalProfile) return <ResultScreen profile={finalProfile} onRestart={handleRestart} />;
+  return null;
 }
